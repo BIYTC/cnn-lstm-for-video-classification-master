@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="5b5c58b4-0d7c-4ca6-b97c-15b512619217" name="cnn_lstm" url="http://111.44.254.172">
+        <fileTransfer host="111.44.254.172" port="58689" rootFolder="/root" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="58689" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

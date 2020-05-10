@@ -1,0 +1,6 @@
+/root/cnn-lstm-for-video-classification/data/image_data/ApplyEyeMakeup/1 0
+/root/cnn-lstm-for-video-classification/data/image_data/running/4 1
+/root/cnn-lstm-for-video-classification/data/image_data/ApplyEyeMakeup/3 0
+/root/cnn-lstm-for-video-classification/data/image_data/running/1 1
+/root/cnn-lstm-for-video-classification/data/image_data/ApplyEyeMakeup/4 0
+/root/cnn-lstm-for-video-classification/data/image_data/running/3 1
