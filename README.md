@@ -17,3 +17,9 @@ Pytorch 1.1.0
 ## License
 This project is licensed under the MIT License 
 
+## updata
+fix some bugs about loss
+save model
+
+## going to add
+demo
