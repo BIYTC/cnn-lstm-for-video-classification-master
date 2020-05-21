@@ -28,6 +28,8 @@ class EncoderCNN(nn.Module):
             # ResNet CNN
             # with torch.no_grad():
             x = self.resnet(x_3d[:, t, :, :, :])  # ResNet
+            #TODO:做特征图融合或做全连接融合
+            
             x = x.view(x.size(0), -1)  # flatten output of conv
 
             # FC layers
