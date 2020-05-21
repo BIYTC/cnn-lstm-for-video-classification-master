@@ -2,6 +2,7 @@ import torch
 from torch.utils import data
 from PIL import Image
 import os
+import random
 
 
 class Dataset(data.Dataset):
@@ -41,9 +42,9 @@ class Dataset(data.Dataset):
             img = Image.open(os.path.join(path, img_name))
             img = self.transform(img)
             X.append(img)
-
+        random.shuffle(X)
         # n = 16
-        n = 48
+        n = 30
         X = [torch.stack(X[i * n:(i + 1) * n]) for i in range((len(X) + n - 1) // n) if len(X[i * n:(i + 1) * n]) == n]
         X = torch.stack(X)
 

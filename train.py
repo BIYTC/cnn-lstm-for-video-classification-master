@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 from sklearn.metrics import accuracy_score
 import torchvision.transforms as transforms
+from tensorboardX import SummaryWriter
 
 # CUDA for PyTorch
 use_cuda = torch.cuda.is_available()
@@ -25,10 +26,10 @@ opt = parser.parse_args()
 # Parameters
 params = {'batch_size': 2,
           'shuffle': True,
-          'num_workers': 1}
+          'num_workers': 2}
 learning_rate = 1e-4
 log_interval = 2  # interval for displaying training info
-epochs = 100
+epochs = 1000
 
 save_model_path = './snapshots'
 
@@ -44,11 +45,10 @@ partition, labels = load_data(opt.data)
 #         transforms.ToTensor()])
 
 # preprocesing
-transform = transforms.Compose([transforms.Resize([350, 480]),
+transform = transforms.Compose([transforms.Resize([350, 960]),
                                 transforms.ToTensor(),
                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-# transform = transforms.Compose([transforms.ToTensor(),
-#                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+#transform = transforms.Compose([transforms.ToTensor(),])
 
 # transform = []
 # transform.append(T.Resize(image_size))
@@ -78,7 +78,7 @@ else:
 losses = []
 scores = []
 
-
+summary_writer = SummaryWriter(log_dir='./14_classes_output_shuffle/summary')
 def train(model, device, training_generator, optimizer, epoch, log_interval):
     # set model as training mode
     # cnn_encoder, rnn_decoder = model
@@ -125,7 +125,7 @@ def train(model, device, training_generator, optimizer, epoch, log_interval):
             loss = 0.0
 
     # show information
-    acc = 100. * (correct / N_count)
+    acc = 100. * correct
     average_loss = sum(losses) / len(training_generator)
     print('Train set ({:d} samples): Average loss: {:.4f}\tAcc: {:.4f}%'.format(N_count, average_loss, acc))
     return average_loss, acc
@@ -165,21 +165,28 @@ def validation(model, device, optimizer, validation_generator):
 
 
 # optimizer
-#crnn_params = list(encoder_cnn.parameters()) + list(decoder_rnn.parameters())
+# crnn_params = list(encoder_cnn.parameters()) + list(decoder_rnn.parameters())
 crnn_params = list(model.parameters())
 optimizer = torch.optim.Adam(crnn_params, lr=learning_rate)
 
 # start training
+val_loss_0 = 100
 for epoch in range(epochs):
     # train, test model
     # train_loss, train_acc = train([encoder_cnn, decoder_rnn], device, training_generator, optimizer, epoch,
     #                               log_interval)
     # val_loss, val_acc = validation([encoder_cnn, decoder_rnn], device, optimizer, validation_generator)
-
     train_loss, train_acc = train(model, device, training_generator, optimizer, epoch,
                                   log_interval)
     val_loss, val_acc = validation(model, device, optimizer, validation_generator)
-
+    summary_writer.add_scalar("train-loss", train_loss, epoch)
+    summary_writer.add_scalar("train-acc", train_acc, epoch)
+    summary_writer.add_scalar("val-loss", val_loss, epoch)
+    summary_writer.add_scalar("val-acc", val_acc, epoch)
+    if val_loss<val_loss_0:
+        torch.save(model.state_dict(), './14_classes_output_shuffle/select_best.pth')
+        val_loss_0 = val_loss
+summary_writer.close()
     # def validation(model, device, optimizer, test_loader):
     #     # set model as testing mode
     #     cnn_encoder, rnn_decoder = model

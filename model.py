@@ -13,7 +13,7 @@ class EncoderCNN(nn.Module):
         self.fc_hidden1, self.fc_hidden2 = fc_hidden1, fc_hidden2
         self.drop_p = drop_p
 
-        resnet = models.resnet18(pretrained=False)
+        resnet = models.resnet18(pretrained=True)
         modules = list(resnet.children())[:-1]  # delete the last fc layer.
         self.resnet = nn.Sequential(*modules)
         self.fc1 = nn.Linear(resnet.fc.in_features, fc_hidden1)
@@ -49,7 +49,7 @@ class EncoderCNN(nn.Module):
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self, CNN_embed_dim=100, h_RNN_layers=3, h_RNN=128, h_FC_dim=128, drop_p=0.3, num_classes=2):
+    def __init__(self, CNN_embed_dim=100, h_RNN_layers=3, h_RNN=128, h_FC_dim=128, drop_p=0.3, num_classes=15):
         super(DecoderRNN, self).__init__()
 
         self.RNN_input_size = CNN_embed_dim
