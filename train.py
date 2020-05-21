@@ -5,7 +5,7 @@ from utils import *
 from torch.utils import data
 from torchvision import transforms as T
 from model import EncoderCNN
-from model import DecoderRNN
+#from model import DecoderRNN
 from model import LSTMCNN
 import torch.nn.functional as F
 import torch.nn as nn
