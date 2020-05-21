@@ -64,13 +64,6 @@ training_generator = data.DataLoader(training_set, **params, collate_fn=training
 validation_set = Dataset(partition['val'], labels, transform)
 validation_generator = data.DataLoader(validation_set, **params, collate_fn=validation_set.my_collate, drop_last=True)
 
-# defining model
-# if use_cuda:
-#     encoder_cnn = EncoderCNN().cuda()
-#     decoder_rnn = DecoderRNN().cuda()
-# else:
-#     encoder_cnn = EncoderCNN()
-#     decoder_rnn = DecoderRNN()
 if use_cuda:
     model = LSTMCNN().cuda()
 else:
