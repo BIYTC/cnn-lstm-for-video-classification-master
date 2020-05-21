@@ -1,2 +1,12 @@
-/root/cnn-lstm-for-video-classification/data/image_data/ApplyEyeMakeup/2 0
-/root/cnn-lstm-for-video-classification/data/image_data/running/2 1
+/root/cnn-lstm-for-video-classification/data/image_data/positive/0 0
+/root/cnn-lstm-for-video-classification/data/image_data/positive/15285 0
+/root/cnn-lstm-for-video-classification/data/image_data/negtive/18987 1
+/root/cnn-lstm-for-video-classification/data/image_data/positive/19131 0
+/root/cnn-lstm-for-video-classification/data/image_data/positive/7812 0
+/root/cnn-lstm-for-video-classification/data/image_data/negtive/8468 1
+/root/cnn-lstm-for-video-classification/data/image_data/negtive/24364 1
+/root/cnn-lstm-for-video-classification/data/image_data/negtive/10763 1
+/root/cnn-lstm-for-video-classification/data/image_data/negtive/4017 1
+/root/cnn-lstm-for-video-classification/data/image_data/positive/19083 0
+/root/cnn-lstm-for-video-classification/data/image_data/negtive/9514 1
+/root/cnn-lstm-for-video-classification/data/image_data/positive/13493 0
