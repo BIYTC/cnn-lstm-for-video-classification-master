@@ -5,7 +5,6 @@ from utils import *
 from torch.utils import data
 from torchvision import transforms as T
 from model import EncoderCNN
-from model import DecoderRNN
 from model import LSTMCNN
 import torch.nn.functional as F
 import torch.nn as nn
@@ -48,7 +47,7 @@ partition, labels = load_data(opt.data)
 transform = transforms.Compose([transforms.Resize([350, 960]),
                                 transforms.ToTensor(),
                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-#transform = transforms.Compose([transforms.ToTensor(),])
+# transform = transforms.Compose([transforms.ToTensor(),])
 
 # transform = []
 # transform.append(T.Resize(image_size))
@@ -71,7 +70,9 @@ else:
 losses = []
 scores = []
 
-summary_writer = SummaryWriter(log_dir='./14_classes_output_shuffle/summary')
+summary_writer = SummaryWriter(log_dir='./mkdir 14_output_max/summary')
+
+
 def train(model, device, training_generator, optimizer, epoch, log_interval):
     # set model as training mode
     # cnn_encoder, rnn_decoder = model
@@ -176,48 +177,48 @@ for epoch in range(epochs):
     summary_writer.add_scalar("train-acc", train_acc, epoch)
     summary_writer.add_scalar("val-loss", val_loss, epoch)
     summary_writer.add_scalar("val-acc", val_acc, epoch)
-    if val_loss<val_loss_0:
-        torch.save(model.state_dict(), './14_classes_output_shuffle/select_best.pth')
+    if val_loss < val_loss_0:
+        torch.save(model.state_dict(), './mkdir 14_output_max/select_best.pth')
         val_loss_0 = val_loss
 summary_writer.close()
-    # def validation(model, device, optimizer, test_loader):
-    #     # set model as testing mode
-    #     cnn_encoder, rnn_decoder = model
-    #     cnn_encoder.eval()
-    #     rnn_decoder.eval()
+# def validation(model, device, optimizer, test_loader):
+#     # set model as testing mode
+#     cnn_encoder, rnn_decoder = model
+#     cnn_encoder.eval()
+#     rnn_decoder.eval()
 
-    #     test_loss = 0
-    #     all_y = []
-    #     all_y_pred = []
-    #     with torch.no_grad():
-    #         for X, y in test_loader:
-    #             # distribute data to device
-    #             X, y = X.to(device), y.to(device).view(-1, )
+#     test_loss = 0
+#     all_y = []
+#     all_y_pred = []
+#     with torch.no_grad():
+#         for X, y in test_loader:
+#             # distribute data to device
+#             X, y = X.to(device), y.to(device).view(-1, )
 
-    #             output = rnn_decoder(cnn_encoder(X))
+#             output = rnn_decoder(cnn_encoder(X))
 
-    #             loss = F.cross_entropy(output, y, reduction='sum')
-    #             test_loss += loss.item()                 # sum up batch loss
-    #             y_pred = output.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
+#             loss = F.cross_entropy(output, y, reduction='sum')
+#             test_loss += loss.item()                 # sum up batch loss
+#             y_pred = output.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
 
-    #             # collect all y and y_pred in all batches
-    #             all_y.extend(y)
-    #             all_y_pred.extend(y_pred)
+#             # collect all y and y_pred in all batches
+#             all_y.extend(y)
+#             all_y_pred.extend(y_pred)
 
-    #     test_loss /= len(test_loader.dataset)
+#     test_loss /= len(test_loader.dataset)
 
-    #     # compute accuracy
-    #     all_y = torch.stack(all_y, dim=0)
-    #     all_y_pred = torch.stack(all_y_pred, dim=0)
-    #     test_score = accuracy_score(all_y.cpu().data.squeeze().numpy(), all_y_pred.cpu().data.squeeze().numpy())
+#     # compute accuracy
+#     all_y = torch.stack(all_y, dim=0)
+#     all_y_pred = torch.stack(all_y_pred, dim=0)
+#     test_score = accuracy_score(all_y.cpu().data.squeeze().numpy(), all_y_pred.cpu().data.squeeze().numpy())
 
-    #     # show information
-    #     print('\nTest set ({:d} samples): Average loss: {:.4f}, Accuracy: {:.2f}%\n'.format(len(all_y), test_loss, 100* test_score))
+#     # show information
+#     print('\nTest set ({:d} samples): Average loss: {:.4f}, Accuracy: {:.2f}%\n'.format(len(all_y), test_loss, 100* test_score))
 
-    #     # save Pytorch models of best record
-    #     torch.save(cnn_encoder.state_dict(), os.path.join(save_model_path, 'cnn_encoder_epoch{}.pth'.format(epoch + 1)))  # save spatial_encoder
-    #     torch.save(rnn_decoder.state_dict(), os.path.join(save_model_path, 'rnn_decoder_epoch{}.pth'.format(epoch + 1)))  # save motion_encoder
-    #     torch.save(optimizer.state_dict(), os.path.join(save_model_path, 'optimizer_epoch{}.pth'.format(epoch + 1)))      # save optimizer
-    #     print("Epoch {} model saved!".format(epoch + 1))
+#     # save Pytorch models of best record
+#     torch.save(cnn_encoder.state_dict(), os.path.join(save_model_path, 'cnn_encoder_epoch{}.pth'.format(epoch + 1)))  # save spatial_encoder
+#     torch.save(rnn_decoder.state_dict(), os.path.join(save_model_path, 'rnn_decoder_epoch{}.pth'.format(epoch + 1)))  # save motion_encoder
+#     torch.save(optimizer.state_dict(), os.path.join(save_model_path, 'optimizer_epoch{}.pth'.format(epoch + 1)))      # save optimizer
+#     print("Epoch {} model saved!".format(epoch + 1))
 
-    # return test_loss, test_score
+# return test_loss, test_score
