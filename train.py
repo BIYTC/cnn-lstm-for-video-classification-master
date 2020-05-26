@@ -1,224 +1,309 @@
-import numpy as np
-from dataset import *
-import argparse
-from utils import *
-from torch.utils import data
-from torchvision import transforms as T
-from model import EncoderCNN
-from model import LSTMCNN
-import torch.nn.functional as F
+import shutil
 import torch.nn as nn
-from sklearn.metrics import accuracy_score
-import torchvision.transforms as transforms
+import torch.optim
 from tensorboardX import SummaryWriter
-
-# CUDA for PyTorch
-use_cuda = torch.cuda.is_available()
-# use_cuda = False
-device = torch.device("cuda:0" if use_cuda else "cpu")
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--data', type=str, default='./data', help='path to dataset')
-opt = parser.parse_args()
-
-#
-# Parameters
-params = {'batch_size': 2,
-          'shuffle': True,
-          'num_workers': 2}
-learning_rate = 1e-4
-log_interval = 2  # interval for displaying training info
-epochs = 1000
-
-save_model_path = './snapshots'
-
-# Datasets
-partition, labels = load_data(opt.data)
-
-# #pre_processing
-# transform = transforms.Compose([
-#         transforms.RandomHorizontalFlip(), 
-#         transforms.Resize((224,224)),
-#         transforms.Normalize((0.485, 0.456, 0.406), 
-#                              (0.229, 0.224, 0.225)),
-#         transforms.ToTensor()])
-
-# preprocesing
-transform = transforms.Compose([transforms.Resize([350, 960]),
-                                transforms.ToTensor(),
-                                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-# transform = transforms.Compose([transforms.ToTensor(),])
-
-# transform = []
-# transform.append(T.Resize(image_size))
-# transform.append(T.RandomHorizontalFlip())
-# transform.append(T.ToTensor())
-# transform.append(T.Normalize(
-#     mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
-# transform = T.Compose(transform)
-
-# generators
-training_set = Dataset(partition['train'], labels, transform)
-training_generator = data.DataLoader(training_set, **params, collate_fn=training_set.my_collate, drop_last=True)
-validation_set = Dataset(partition['val'], labels, transform)
-validation_generator = data.DataLoader(validation_set, **params, collate_fn=validation_set.my_collate, drop_last=True)
-
-if use_cuda:
-    model = LSTMCNN().cuda()
-else:
-    model = LSTMCNN()
-losses = []
-scores = []
-
-summary_writer = SummaryWriter(log_dir='./mkdir 14_output_max/summary')
+from torch.autograd import Variable
+from torch.optim.rmsprop import RMSprop
+from tqdm import tqdm
+from utils import AverageTracker
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import os
+import time
+from utils import LoadImages
 
 
-def train(model, device, training_generator, optimizer, epoch, log_interval):
-    # set model as training mode
-    # cnn_encoder, rnn_decoder = model
-    # cnn_encoder.train()
-    # rnn_decoder.train()
-    model.train()
 
-    train_loss = 0.0
-    # counting total trained sample in one epoch
-    N_count = 0
-    correct = 0
-    losses = []
+class Train:
+    def __init__(self, model, trainloader, valloader, args):
+        self.model = model
+        self.trainloader = trainloader
+        self.valloader = valloader
+        self.args = args
+        self.start_epoch = 0
+        self.best_top1 = 0.0
 
-    # Training
-    for i, (X, y) in enumerate(training_generator):
-        # Transfer to GPU
-        X, y = X.to(device), y.to(device)
+        self.test_best_top1 = 0.0
+        self.batch_size = args.batch_size
+        # self.mean = args.mean
+        # self.std = args.std
 
-        N_count += X.size(0)
+        # Loss function and Optimizer
+        self.loss = None
+        self.optimizer = None
+        self.create_optimization()
 
-        # out_cnn = encoder_cnn(X)
-        # # out1 = out1.reshape(3, -1, 1000).to(device)
-        # out_rnn = decoder_rnn(out_cnn)
-        out_rnn = model(X)
-        loss = F.cross_entropy(out_rnn, y)
-        losses.append(loss.item())
+        # Model Loading
+        self.load_pretrained_model()
+        self.load_checkpoint(self.args.resume_from)
 
-        # to compute accuracy
-        y_pred = torch.max(out_rnn, 1)[1]  # y_pred != output
-        correct = accuracy_score(y.cpu().data.squeeze().numpy(), y_pred.cpu().data.squeeze().numpy())
+        # Tensorboard Writer
+        self.summary_writer = SummaryWriter(log_dir=args.summary_dir)
+        # if not self.args.visual_mode:
+        # save the graph for the neural network model
+        # graph_input = torch.rand(args.batch_size, args.num_channels, args.img_height, args.img_width)
+        # if self.args.cuda:
+        #     graph_input = graph_input.cuda(self.args.cuda_select)
+        # self.summary_writer.add_graph(model, (graph_input,))
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    def train(self):
+        for cur_epoch in range(self.start_epoch, self.args.num_epochs):
 
-        # show information
-        if (i + 1) % log_interval == 0:
-            # avg_loss = train_loss / log_interval
-            avg_loss = loss / log_interval
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch + 1, N_count, len(training_generator.dataset), 100. * (i + 1) / len(training_generator),
-                avg_loss))
-            # train_loss = 0.0
-            loss = 0.0
+            # Initialize tqdm
+            tqdm_batch = tqdm(self.trainloader,
+                              desc="Epoch-" + str(cur_epoch) + "-")
 
-    # show information
-    acc = 100. * correct
-    average_loss = sum(losses) / len(training_generator)
-    print('Train set ({:d} samples): Average loss: {:.4f}\tAcc: {:.4f}%'.format(N_count, average_loss, acc))
-    return average_loss, acc
+            # Learning rate adjustment
+            self.adjust_learning_rate(self.optimizer, cur_epoch)
 
+            # Meters for tracking the average values
+            loss, top1, top5 = AverageTracker(), AverageTracker(), AverageTracker()
 
-def validation(model, device, optimizer, validation_generator):
-    # set model as testing mode
-    # cnn_encoder, rnn_decoder = model
-    # cnn_encoder.eval()
-    # rnn_decoder.eval()
-    model.eval()
+            # Set the model to be in training mode (for dropout and batchnorm)
+            self.model.train()
 
-    N_count = 0
-    correct = 0
-    losses = []
+            for iters, (data, target) in enumerate(tqdm_batch):
 
-    with torch.no_grad():
-        for X, y in validation_generator:
-            # distribute data to device
-            X, y = X.to(device), y.to(device)
+                if self.args.cuda:
+                    data, target = data.cuda(device=self.args.cuda_select, non_blocking=self.args.async_loading), \
+                                   target.cuda(device=self.args.cuda_select, non_blocking=self.args.async_loading)
+                    # data, target = data.cuda(), target.cuda()
+                data_var, target_var = Variable(data), Variable(target)
 
-            N_count += X.size(0)
+                # Forward pass
+                output = self.model(data_var)
+                cur_loss = self.loss(output, target_var)
 
-            # output = rnn_decoder(cnn_encoder(X))
-            output = model(X)
-            loss = F.cross_entropy(output, y)
-            losses.append(loss)
+                # Optimization step
+                self.optimizer.zero_grad()
+                cur_loss.backward()
+                self.optimizer.step()
 
-            y_pred = output.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
-            correct += y_pred.eq(y.view_as(y_pred)).sum().item()
+                # Top-1 and Top-5 Accuracy Calculation
+                cur_acc1, cur_acc5 = self.compute_accuracy(output.data, target, topk=(1, 3))
+                # loss.update(cur_loss.data[0])
+                loss.update(cur_loss.data.item())
+                top1.update(cur_acc1[0].item())
+                top5.update(cur_acc5[0].item())
+                if iters % 100 == 0:
+                    print('  loss:{}, acc1:{}, acc5:{}'.format(cur_loss.data.item(), cur_acc1[0].item(),
+                                                               cur_acc5[0].item()))
 
-    # show information
-    acc = 100. * (correct / N_count)
-    average_loss = sum(losses) / len(validation_generator)
-    print('Validation set ({:d} samples): Average loss: {:.4f}\tAcc: {:.4f}%'.format(N_count, average_loss, acc))
-    return average_loss, acc
+            # Summary Writing
+            self.summary_writer.add_scalar("epoch-loss", loss.avg, cur_epoch)
+            self.summary_writer.add_scalar("epoch-top-1-acc", top1.avg, cur_epoch)
+            self.summary_writer.add_scalar("epoch-top-5-acc", top5.avg, cur_epoch)
 
+            # Print in console
+            tqdm_batch.close()
+            print("Epoch-" + str(cur_epoch) + " | " + "loss: " + str(
+                loss.avg)[:7] + " - acc-top1: " + str(
+                top1.avg)[:7] + "- acc-top5: " + str(top5.avg)[:7])
 
-# optimizer
-# crnn_params = list(encoder_cnn.parameters()) + list(decoder_rnn.parameters())
-crnn_params = list(model.parameters())
-optimizer = torch.optim.Adam(crnn_params, lr=learning_rate)
+            # Checkpointing
+            is_best = top1.avg > self.best_top1
+            self.best_top1 = max(top1.avg, self.best_top1)
+            self.save_checkpoint({
+                'epoch': cur_epoch + 1,
+                'state_dict': self.model.state_dict(),
+                'best_top1': self.best_top1,
+                # 'mean': self.mean,
+                # 'std': self.std,
+                'optimizer': self.optimizer.state_dict(),
+            }, train_is_best=is_best)
 
-# start training
-val_loss_0 = 100
-for epoch in range(epochs):
-    # train, test model
-    # train_loss, train_acc = train([encoder_cnn, decoder_rnn], device, training_generator, optimizer, epoch,
-    #                               log_interval)
-    # val_loss, val_acc = validation([encoder_cnn, decoder_rnn], device, optimizer, validation_generator)
-    train_loss, train_acc = train(model, device, training_generator, optimizer, epoch,
-                                  log_interval)
-    val_loss, val_acc = validation(model, device, optimizer, validation_generator)
-    summary_writer.add_scalar("train-loss", train_loss, epoch)
-    summary_writer.add_scalar("train-acc", train_acc, epoch)
-    summary_writer.add_scalar("val-loss", val_loss, epoch)
-    summary_writer.add_scalar("val-acc", val_acc, epoch)
-    if val_loss < val_loss_0:
-        torch.save(model.state_dict(), './mkdir 14_output_max/select_best.pth')
-        val_loss_0 = val_loss
-summary_writer.close()
-# def validation(model, device, optimizer, test_loader):
-#     # set model as testing mode
-#     cnn_encoder, rnn_decoder = model
-#     cnn_encoder.eval()
-#     rnn_decoder.eval()
+            # Evaluate on Validation Set
+            if (cur_epoch+1) % self.args.test_every == 0 and self.valloader:
+                self.test(self.valloader, cur_epoch)
 
-#     test_loss = 0
-#     all_y = []
-#     all_y_pred = []
-#     with torch.no_grad():
-#         for X, y in test_loader:
-#             # distribute data to device
-#             X, y = X.to(device), y.to(device).view(-1, )
+    def test(self, testloader, cur_epoch=-1):
+        loss, top1, top5 = AverageTracker(), AverageTracker(), AverageTracker()
 
-#             output = rnn_decoder(cnn_encoder(X))
+        # Set the model to be in testing mode (for dropout and batchnorm)
+        self.model.eval()
 
-#             loss = F.cross_entropy(output, y, reduction='sum')
-#             test_loss += loss.item()                 # sum up batch loss
-#             y_pred = output.max(1, keepdim=True)[1]  # (y_pred != output) get the index of the max log-probability
+        target_pre = []
+        target_label = []
+        target_cre = []
+        target_error = []
+        T = 0
+        for data, target in testloader:
 
-#             # collect all y and y_pred in all batches
-#             all_y.extend(y)
-#             all_y_pred.extend(y_pred)
+            if self.args.cuda:
+                data, target = data.cuda(device=self.args.cuda_select, non_blocking=self.args.async_loading), \
+                               target.cuda(device=self.args.cuda_select, non_blocking=self.args.async_loading)
+            # data_var, target_var = Variable(data, volatile=True), Variable(target, volatile=True)
+            with torch.no_grad():
+                data_var, target_var = Variable(data), Variable(target)
 
-#     test_loss /= len(test_loader.dataset)
+            # Forward pass
+            start = time.time()
+            output = self.model(data_var)
+            end = time.time()
+            Time = end - start
+            cur_loss = self.loss(output, target_var)
+            T = T + Time
+            # Top-1 and Top-5 Accuracy Calculation
+            cur_acc1, cur_acc5 = self.compute_accuracy(output, target, topk=(1, 3))
+            # loss.update(cur_loss.data[0])
+            loss.update(cur_loss.data.item())
+            top1.update(cur_acc1[0].item())
+            top5.update(cur_acc5[0].item())
 
-#     # compute accuracy
-#     all_y = torch.stack(all_y, dim=0)
-#     all_y_pred = torch.stack(all_y_pred, dim=0)
-#     test_score = accuracy_score(all_y.cpu().data.squeeze().numpy(), all_y_pred.cpu().data.squeeze().numpy())
+            if self.args.TestMode:
+                Pos, label, Cre, Error = self.compute_Pos_Cre(F.softmax(output, dim=1), target)
+                target_pre.extend(Pos)
+                target_label.extend(label)
+                target_cre.extend(Cre)
+                target_error.extend(Error)
 
-#     # show information
-#     print('\nTest set ({:d} samples): Average loss: {:.4f}, Accuracy: {:.2f}%\n'.format(len(all_y), test_loss, 100* test_score))
+                # print('\nReal:', label,
+                #       '\nPrediction:', Pos,
+                #       '\nCredit:', Cre,
+                #       '\nError:', Error,
+                #       '\nTime:', Time
+                #       )
 
-#     # save Pytorch models of best record
-#     torch.save(cnn_encoder.state_dict(), os.path.join(save_model_path, 'cnn_encoder_epoch{}.pth'.format(epoch + 1)))  # save spatial_encoder
-#     torch.save(rnn_decoder.state_dict(), os.path.join(save_model_path, 'rnn_decoder_epoch{}.pth'.format(epoch + 1)))  # save motion_encoder
-#     torch.save(optimizer.state_dict(), os.path.join(save_model_path, 'optimizer_epoch{}.pth'.format(epoch + 1)))      # save optimizer
-#     print("Epoch {} model saved!".format(epoch + 1))
+        # plt.imshow(data[0].cpu().squeeze(), cmap='gray')
+        #
+        #         plt.title('Real:%i,Pred:%i,Credit:%f' % (label[0], Pos[0], Cre[0]))
+        #         plt.plot([label[0], label[0]],
+        #                  [0, data[0].size(1) - 1], color='green', linewidth=1.0)
+        #
+        #         plt.plot([Pos[0], Pos[0]],
+        #                  [0, data[0].size(1) - 1], color='red', linewidth=1.0)
+        #         plt.xticks(())
+        #         plt.yticks(())
+        #         plt.show()
+        # AVgT = T / (100 / self.batch_size)
+        # print("AVgT=\n", AVgT)
 
-# return test_loss, test_score
+        if self.args.TestMode:
+            self.save_comparisions(loss.avg, top1.avg, top5.avg, target_pre, target_label, target_cre, target_error,
+                                   filename='comparisions')
+        else:
+            # Checkpointing
+            test_is_best = top1.avg > self.test_best_top1
+            self.test_best_top1 = max(top1.avg, self.test_best_top1)
+
+            if test_is_best:
+                self.save_checkpoint({
+                    'epoch': cur_epoch + 1,
+                    'state_dict': self.model.state_dict(),
+                    'best_top1': self.best_top1,
+                    # 'mean': self.mean,
+                    # 'std': self.std,
+                    'optimizer': self.optimizer.state_dict(),
+                }, test_is_best=test_is_best)
+        if cur_epoch != -1 and not self.args.TestMode:
+            # Summary Writing
+            self.summary_writer.add_scalar("test-loss", loss.avg, cur_epoch)
+            self.summary_writer.add_scalar("test-top-1-acc", top1.avg, cur_epoch)
+            self.summary_writer.add_scalar("test-top-5-acc", top5.avg, cur_epoch)
+
+        print("Test Results" + " | " + "loss: " + str(loss.avg)[:7] + " - acc-top1: " + str(
+            top1.avg)[:7] + "- acc-top5: " + str(top5.avg)[:7])
+
+    def save_checkpoint(self, state, train_is_best=False, test_is_best=False, filename='checkpoint.pth.tar'):
+        if not test_is_best:
+            torch.save(state, self.args.checkpoint_dir + filename)
+            if train_is_best:
+                shutil.copyfile(self.args.checkpoint_dir + filename,
+                                self.args.checkpoint_dir + 'model_train_best.pth.tar')
+        else:
+            shutil.copyfile(self.args.checkpoint_dir + filename,
+                            self.args.checkpoint_dir + 'model_test_best.pth.tar')
+
+    def compute_accuracy(self, output, target, topk=(1,)):
+        """Computes the accuracy@k for the specified values of k"""
+        maxk = max(topk)
+        batch_size = target.size(0)
+
+        _, idx = output.topk(maxk, 1, True, True)
+        idx = idx.t()
+        correct = idx.eq(target.view(1, -1).expand_as(idx))
+
+        acc_arr = []
+        for k in topk:
+            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+            acc_arr.append(correct_k.mul_(1.0 / batch_size))
+        return acc_arr
+
+    def adjust_learning_rate(self, optimizer, epoch):
+        """Sets the learning rate to the initial LR multiplied by 0.98 every epoch"""
+        learning_rate = self.args.learning_rate * (self.args.learning_rate_decay ** epoch)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = learning_rate
+
+    def create_optimization(self):
+        self.loss = nn.CrossEntropyLoss()
+
+        if self.args.cuda:
+            self.loss.cuda(self.args.cuda_select)
+
+        self.optimizer = RMSprop(self.model.parameters(), self.args.learning_rate,
+                                 momentum=self.args.momentum,
+                                 weight_decay=self.args.weight_decay)
+
+    def load_pretrained_model(self):
+        try:
+            print("Loading ImageNet pretrained weights...")
+            pretrained_dict = torch.load(self.args.pretrained_path)
+            self.model.load_state_dict(pretrained_dict)
+            print("ImageNet pretrained weights loaded successfully.\n")
+        except:
+            print("No ImageNet pretrained weights exist. Skipping...\n")
+
+    def load_checkpoint(self, filename):
+        filename = self.args.checkpoint_dir + filename
+        try:
+            print("Loading checkpoint '{}'".format(filename))
+            checkpoint = torch.load(filename)
+            # self.mean = checkpoint['mean']
+            # self.std = checkpoint['std']
+            self.start_epoch = checkpoint['epoch']
+            self.best_top1 = checkpoint['best_top1']
+            self.model.load_state_dict(checkpoint['state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+            print("Checkpoint loaded successfully from '{}' at (epoch {})\n"
+                  .format(self.args.checkpoint_dir, checkpoint['epoch']))
+        except:
+            print("No checkpoint exists from '{}'. Skipping...\n".format(filename))
+            if self.args.TestMode:
+                assert not self.args.TestMode, "No checkpoint exists from '{}'\n".format(filename)
+
+    def compute_Pos_Cre(self, output, target):
+
+        Pos = torch.max(output, 1)[1].view(1, -1)
+        Cre = torch.max(output, 1)[0].view(1, -1)
+        Error = Pos - target.view(1, -1)
+
+        return Pos.cpu().detach().numpy().reshape(-1).tolist(), \
+               target.cpu().detach().numpy().reshape(-1).tolist(), \
+               Cre.cpu().detach().numpy().reshape(-1).tolist(), \
+               Error.cpu().detach().numpy().reshape(-1).tolist()
+
+    def save_comparisions(self, loss, acc_top1, acc_top5, target_pre, target_label, target_cre, target_error,
+                          filename='comparisions'):
+
+        filename = self.args.checkpoint_dir + filename + '_' + time.strftime('%Y%m%d_%H%M',
+                                                                             time.localtime(time.time())) + '.txt'
+
+        file = open(filename, 'w')
+        file.write('Train epoch: %d\n' % self.start_epoch)
+        file.write('Train best top1: %.4f\n' % self.best_top1)
+        file.write('Test average loss: %.4f\n' % loss)
+        file.write('Test accuracy top1: %.4f\n' % acc_top1)
+        file.write('Test accuracy top5: %.4f\n' % acc_top5)
+        file.write('Prediction:\n')
+        file.write(str(target_pre))
+        file.write('\nLabel:\n')
+        file.write(str(target_label))
+        file.write('\nCredit:\n')
+        file.write(str(target_cre))
+        file.write('\nError:\n')
+        file.write(str(target_error))
+        file.close()
+
+        print('\nSave comparisions.\n')
