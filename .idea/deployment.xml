@@ -10,6 +10,10 @@
           <excludedPaths>
             <excludedPath local="true" path="$PROJECT_DIR$/data/image_data" />
             <excludedPath local="true" path="$PROJECT_DIR$/data/video_data" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data/labels.txt" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data/train.txt" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data/trainval.txt" />
+            <excludedPath local="true" path="$PROJECT_DIR$/data/val.txt" />
           </excludedPaths>
         </serverdata>
       </paths>

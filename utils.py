@@ -75,28 +75,28 @@ def create_experiment_dirs(exp_dir):
         exit(-1)
 
 
-def calc_dataset_stats(dataset, axis=0, ep=1e-7):
-    BatchNum = 2000
-    mean = np.zeros(1)
-    std = np.zeros(1)
-    Nt = dataset.shape[0] // BatchNum
-    if Nt > 0:
-        for i in range(Nt):
-            mean += np.mean(dataset[i * BatchNum:(i + 1) * BatchNum], axis=axis) / 255.0 * BatchNum
-            std += (np.std(dataset[i * BatchNum:(i + 1) * BatchNum] + ep, axis=axis) / 255.0) ** 2 * (BatchNum)
-
-        mean += np.mean(dataset[Nt * BatchNum:dataset.shape[0]], axis=axis) / 255.0 * (dataset.shape[0] - Nt * BatchNum)
-        std += (np.std(dataset[Nt * BatchNum:dataset.shape[0]] + ep, axis=axis) / 255.0) ** 2 * (
-            dataset.shape[0] - Nt * BatchNum)
-        mean = mean / dataset.shape[0]
-        std = (std / (dataset.shape[0])) ** 0.5
-        # pass
-    else:
-        mean = np.mean(dataset, axis=axis) / 255.0
-        std = np.std(dataset + ep, axis=axis) / 255.0
-        # pass
-
-    return mean.tolist(), std.tolist()
+# def calc_dataset_stats(dataset, axis=0, ep=1e-7):
+#     BatchNum = 2000
+#     mean = np.zeros(1)
+#     std = np.zeros(1)
+#     Nt = dataset.shape[0] // BatchNum
+#     if Nt > 0:
+#         for i in range(Nt):
+#             mean += np.mean(dataset[i * BatchNum:(i + 1) * BatchNum], axis=axis) / 255.0 * BatchNum
+#             std += (np.std(dataset[i * BatchNum:(i + 1) * BatchNum] + ep, axis=axis) / 255.0) ** 2 * (BatchNum)
+#
+#         mean += np.mean(dataset[Nt * BatchNum:dataset.shape[0]], axis=axis) / 255.0 * (dataset.shape[0] - Nt * BatchNum)
+#         std += (np.std(dataset[Nt * BatchNum:dataset.shape[0]] + ep, axis=axis) / 255.0) ** 2 * (
+#             dataset.shape[0] - Nt * BatchNum)
+#         mean = mean / dataset.shape[0]
+#         std = (std / (dataset.shape[0])) ** 0.5
+#         # pass
+#     else:
+#         mean = np.mean(dataset, axis=axis) / 255.0
+#         std = np.std(dataset + ep, axis=axis) / 255.0
+#         # pass
+#
+#     return mean.tolist(), std.tolist()
 
 
 class AverageTracker:
@@ -116,44 +116,19 @@ class AverageTracker:
         self.avg = self.sum / self.count
 
 
-def LoadImages(path):
-    images = []
-    labels = []
-    for fn in os.listdir(path):
-        if fn.endswith('.jpg'):
-            fd = os.path.join(path, fn)
-            images.append(read_image(fd))
-            labels.append(read_label(fd))
-            z = np.array(list(map(int, labels)))
-            z = np.rint(z / 4)
-            z = z.astype(np.int16)
-    return np.array(images), z
 
-
-def read_image(filename):
-    im = Image.open(filename).convert('L')
-    data = np.array(im)
-    return data
-
-
-def read_label(filename):
-    basename = os.path.basename(filename)
-    data = basename.split('_')[-2]
-    return data
-
-
-def load_mean_std(filename):
-    # filename = self.args.checkpoint_dir + filename
-    try:
-        print("Loading mean and std '{}'".format(filename))
-        checkpoint = torch.load(filename)
-        mean = checkpoint['mean']
-        std = checkpoint['std']
-        print("Load mean and std successfully from '{}' at (epoch {})\n".
-              format(filename, checkpoint['epoch']))
-        return mean, std
-    except:
-        print("No mean and std exists from '{}'. Skipping...\n".format(filename))
+# def load_mean_std(filename):
+#     # filename = self.args.checkpoint_dir + filename
+#     try:
+#         print("Loading mean and std '{}'".format(filename))
+#         checkpoint = torch.load(filename)
+#         mean = checkpoint['mean']
+#         std = checkpoint['std']
+#         print("Load mean and std successfully from '{}' at (epoch {})\n".
+#               format(filename, checkpoint['epoch']))
+#         return mean, std
+#     except:
+#         print("No mean and std exists from '{}'. Skipping...\n".format(filename))
 
 
 # def catlog(label):

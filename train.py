@@ -11,8 +11,6 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import os
 import time
-from utils import LoadImages
-
 
 
 class Train:
@@ -37,7 +35,6 @@ class Train:
         # Model Loading
         self.load_pretrained_model()
         self.load_checkpoint(self.args.resume_from)
-
         # Tensorboard Writer
         self.summary_writer = SummaryWriter(log_dir=args.summary_dir)
         # if not self.args.visual_mode:
@@ -86,20 +83,17 @@ class Train:
                 loss.update(cur_loss.data.item())
                 top1.update(cur_acc1[0].item())
                 top5.update(cur_acc5[0].item())
-                if iters % 100 == 0:
-                    print('  loss:{}, acc1:{}, acc5:{}'.format(cur_loss.data.item(), cur_acc1[0].item(),
-                                                               cur_acc5[0].item()))
 
             # Summary Writing
             self.summary_writer.add_scalar("epoch-loss", loss.avg, cur_epoch)
             self.summary_writer.add_scalar("epoch-top-1-acc", top1.avg, cur_epoch)
-            self.summary_writer.add_scalar("epoch-top-5-acc", top5.avg, cur_epoch)
+            self.summary_writer.add_scalar("epoch-top-3-acc", top5.avg, cur_epoch)
 
             # Print in console
             tqdm_batch.close()
             print("Epoch-" + str(cur_epoch) + " | " + "loss: " + str(
                 loss.avg)[:7] + " - acc-top1: " + str(
-                top1.avg)[:7] + "- acc-top5: " + str(top5.avg)[:7])
+                top1.avg)[:7] + "- acc-top3: " + str(top5.avg)[:7])
 
             # Checkpointing
             is_best = top1.avg > self.best_top1
@@ -114,7 +108,7 @@ class Train:
             }, train_is_best=is_best)
 
             # Evaluate on Validation Set
-            if (cur_epoch+1) % self.args.test_every == 0 and self.valloader:
+            if (cur_epoch + 1) % self.args.test_every == 0 and self.valloader:
                 self.test(self.valloader, cur_epoch)
 
     def test(self, testloader, cur_epoch=-1):
@@ -138,12 +132,8 @@ class Train:
                 data_var, target_var = Variable(data), Variable(target)
 
             # Forward pass
-            start = time.time()
             output = self.model(data_var)
-            end = time.time()
-            Time = end - start
             cur_loss = self.loss(output, target_var)
-            T = T + Time
             # Top-1 and Top-5 Accuracy Calculation
             cur_acc1, cur_acc5 = self.compute_accuracy(output, target, topk=(1, 3))
             # loss.update(cur_loss.data[0])
@@ -242,9 +232,11 @@ class Train:
         if self.args.cuda:
             self.loss.cuda(self.args.cuda_select)
 
-        self.optimizer = RMSprop(self.model.parameters(), self.args.learning_rate,
-                                 momentum=self.args.momentum,
-                                 weight_decay=self.args.weight_decay)
+        # self.optimizer = RMSprop(self.model.parameters(), self.args.learning_rate,
+        #                          momentum=self.args.momentum,
+        #                          weight_decay=self.args.weight_decay)
+        # TODO:改成lstm程序的optimizer
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
 
     def load_pretrained_model(self):
         try:

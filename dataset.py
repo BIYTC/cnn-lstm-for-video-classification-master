@@ -18,19 +18,19 @@ class Dataset(data.Dataset):
         'Denotes the total number of samples'
         return len(self.list_IDs)
 
-    def my_collate(self, batch):
-        videos = []
-        targets = []
-        for item in batch:
-            videos.append(item[0])
-            targets.append(item[1])
-
-        videos = torch.cat(videos)
-        targets = torch.cat(targets)
-        # flatten
-        # targets = targets.view(-1)
-        targets = targets.type(torch.LongTensor)
-        return videos, targets
+    # def my_collate(self, batch):
+    #     videos = []
+    #     targets = []
+    #     for item in batch:
+    #         videos.append(item[0])
+    #         targets.append(item[1])
+    #
+    #     videos = torch.cat(videos)
+    #     targets = torch.cat(targets)
+    #     # flatten
+    #     # targets = targets.view(-1)
+    #     targets = targets.type(torch.LongTensor)
+    #     return videos, targets
 
     def __getitem__(self, index):
         'Generates one sample of data'
@@ -42,7 +42,7 @@ class Dataset(data.Dataset):
             img = Image.open(os.path.join(path, img_name))
             img = self.transform(img)
             X.append(img)
-        random.shuffle(X)
+        # random.shuffle(X)
         # n = 16
         n = 30
         X = [torch.stack(X[i * n:(i + 1) * n]) for i in range((len(X) + n - 1) // n) if len(X[i * n:(i + 1) * n]) == n]
